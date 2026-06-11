@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PhishGuard - AI-powered email security system
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: scans
+    description: Email scan operations
+  - name: dashboard
+    description: Dashboard and analytics
 paths:
   /healthz:
     get:
@@ -24,6 +28,138 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /scans:
+    get:
+      operationId: listScans
+      tags: [scans]
+      summary: List all email scans
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: verdict
+          in: query
+          schema:
+            type: string
+            enum: [safe, suspicious, spam, phishing]
+      responses:
+        "200":
+          description: List of scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Scan"
+    post:
+      operationId: analyzeScan
+      tags: [scans]
+      summary: Analyze an email for phishing/spam
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanInput"
+      responses:
+        "201":
+          description: Scan result created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scan"
+
+  /scans/{id}:
+    get:
+      operationId: getScan
+      tags: [scans]
+      summary: Get a single scan result
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scan"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteScan
+      tags: [scans]
+      summary: Delete a scan record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/recent:
+    get:
+      operationId: getRecentScans
+      tags: [dashboard]
+      summary: Get recent scan activity
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Scan"
+
+  /dashboard/trend:
+    get:
+      operationId: getThreatTrend
+      tags: [dashboard]
+      summary: Get threat trend over time (last 7 days)
+      responses:
+        "200":
+          description: Daily threat counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrendPoint"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +170,107 @@ components:
       required:
         - status
 
+    ScanInput:
+      type: object
+      required: [emailContent]
+      properties:
+        emailContent:
+          type: string
+          minLength: 1
+          description: Full raw email content (headers + body)
+        senderEmail:
+          type: ["string", "null"]
+          description: Sender email address if known
+        subject:
+          type: ["string", "null"]
+          description: Email subject line
+
+    ThreatIndicator:
+      type: object
+      required: [type, description, severity]
+      properties:
+        type:
+          type: string
+          enum: [urgent_language, fake_login, suspicious_url, misspelled_domain, password_request, ip_url, url_shortener, attachment, brand_impersonation, generic]
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+
+    ExtractedUrl:
+      type: object
+      required: [url, isSuspicious]
+      properties:
+        url:
+          type: string
+        isSuspicious:
+          type: boolean
+        reason:
+          type: ["string", "null"]
+
+    Scan:
+      type: object
+      required: [id, emailContent, verdict, confidence, explanation, scannedAt]
+      properties:
+        id:
+          type: integer
+        emailContent:
+          type: string
+        senderEmail:
+          type: ["string", "null"]
+        subject:
+          type: ["string", "null"]
+        verdict:
+          type: string
+          enum: [safe, suspicious, spam, phishing]
+        confidence:
+          type: number
+          description: Confidence score 0-100
+        explanation:
+          type: string
+          description: Human-readable AI explanation
+        indicators:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThreatIndicator"
+        extractedUrls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExtractedUrl"
+        scannedAt:
+          type: string
+          format: date-time
+
+    DashboardStats:
+      type: object
+      required: [totalScans, safeCount, suspiciousCount, spamCount, phishingCount, threatRate]
+      properties:
+        totalScans:
+          type: integer
+        safeCount:
+          type: integer
+        suspiciousCount:
+          type: integer
+        spamCount:
+          type: integer
+        phishingCount:
+          type: integer
+        threatRate:
+          type: number
+          description: Percentage of emails that are threats
+
+    TrendPoint:
+      type: object
+      required: [date, safe, suspicious, spam, phishing]
+      properties:
+        date:
+          type: string
+        safe:
+          type: integer
+        suspicious:
+          type: integer
+        spam:
+          type: integer
+        phishing:
+          type: integer
