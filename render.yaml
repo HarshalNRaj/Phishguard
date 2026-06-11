@@ -1,0 +1,33 @@
+databases:
+  - name: phishguard-db
+    databaseName: phishguard
+    user: phishguard_user
+    plan: free
+
+services:
+  - type: web
+    name: phishguard
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: |
+      npm install -g pnpm@latest &&
+      pnpm install --frozen-lockfile=false &&
+      pnpm --filter @workspace/phishguard build &&
+      pnpm --filter @workspace/api-server build &&
+      pnpm --filter @workspace/db push
+    startCommand: NODE_ENV=production node --enable-source-maps artifacts/api-server/dist/index.mjs
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: phishguard-db
+          property: connectionString
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: BASE_PATH
+        value: /
+    healthCheckPath: /api/health
